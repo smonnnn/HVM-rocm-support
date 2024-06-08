@@ -19,6 +19,11 @@ extern "C" {
   fn hvm_cu(book_buffer: *const u32);
 }
 
+#[cfg(feature = "rocm")]
+extern "C" {
+  fn hvm_rocm(book_buffer: *const u32);
+}
+
 fn main() {
   let matches = Command::new("hvm")
     .about("HVM2: Higher-order Virtual Machine 2 (32-bit Version)")
@@ -41,6 +46,14 @@ fn main() {
     .subcommand(
       Command::new("run-cu")
         .about("Interprets a file (using CUDA)")
+        .arg(Arg::new("file").required(true))
+        .arg(Arg::new("io")
+          .long("io")
+          .action(ArgAction::SetTrue)
+          .help("Run with IO enabled")))
+    .subcommand(
+      Command::new("run-rocm")
+        .about("Interprets a file (using ROCM)")
         .arg(Arg::new("file").required(true))
         .arg(Arg::new("io")
           .long("io")
@@ -95,6 +108,19 @@ fn main() {
         hvm_cu(data.as_mut_ptr() as *mut u32);
       }
       #[cfg(not(feature = "cuda"))]
+      println!("CUDA runtime not available!\n If you've installed CUDA and nvcc after HVM, please reinstall HVM.");
+    }
+    Some(("run-rocm", sub_matches)) => {
+      let file = sub_matches.get_one::<String>("file").expect("required");
+      let code = fs::read_to_string(file).expect("Unable to read file");
+      let book = ast::Book::parse(&code).unwrap_or_else(|er| panic!("{}",er)).build();
+      let mut data : Vec<u8> = Vec::new();
+      book.to_buffer(&mut data);
+      #[cfg(feature = "rocm")]
+      unsafe {
+        hvm_rocm(data.as_mut_ptr() as *mut u32);
+      }
+      #[cfg(not(feature = "rocm"))]
       println!("CUDA runtime not available!\n If you've installed CUDA and nvcc after HVM, please reinstall HVM.");
     }
     Some(("gen-c", sub_matches)) => {
